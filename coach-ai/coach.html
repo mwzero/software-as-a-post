@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Wellness Coach</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --card: #1e1e1e;
+            --primary: #00e676;
+            --secondary: #2979ff;
+            --text: #e0e0e0;
+            --text-dim: #b0b0b0;
+            --danger: #ff5252;
+            --border: #333;
+        }
+
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg); color: var(--text); margin: 0; padding-bottom: 80px; min-height: 100vh; }
+        
+        /* Layout Utility */
+        .hidden { display: none !important; }
+        .p-20 { padding: 20px; }
+        .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
+        h1, h2, h3 { margin-top: 0; color: var(--primary); }
+        
+        /* UI Components */
+        button { 
+            background: var(--primary); border: none; padding: 12px 20px; border-radius: 8px; 
+            color: #000; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px;
+        }
+        button.sec { background: var(--secondary); color: white; }
+        button.outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        input, select, textarea { 
+            width: 100%; background: #2c2c2c; border: 1px solid var(--border); 
+            color: white; padding: 12px; border-radius: 8px; margin-top: 8px; font-size: 16px;
+        }
+
+        /* Navigation */
+        nav { 
+            position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a1a; 
+            display: flex; justify-content: space-around; padding: 10px; border-top: 1px solid var(--border); z-index: 100;
+        }
+        nav div { font-size: 10px; text-align: center; cursor: pointer; color: var(--text-dim); }
+        nav div.active { color: var(--primary); font-weight: bold; }
+        nav div svg { display: block; margin: 0 auto 4px; width: 24px; height: 24px; }
+
+        /* Wizard */
+        .step-indicator { display: flex; gap: 5px; margin-bottom: 20px; }
+        .step-dot { height: 4px; flex: 1; background: var(--border); border-radius: 2px; }
+        .step-dot.active { background: var(--primary); }
+
+        /* Charts */
+        .chart-container { width: 100%; height: 150px; margin: 20px 0; background: #000; border-radius: 8px; overflow: hidden; position: relative; }
+        polyline { fill: none; stroke-width: 2; stroke-linecap: round; }
+
+        /* Exercise Library Styling */
+        .exercise-item { border-left: 3px solid var(--secondary); padding-left: 10px; margin-bottom: 12px; font-size: 0.9em; }
+        .exercise-item strong { color: var(--secondary); }
+
+        /* Vitals Table */
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+        
+        .api-warning { font-size: 12px; color: var(--danger); border: 1px solid var(--danger); padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .sync-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; background: #333; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <!-- ONBOARDING WIZARD -->
+        <section id="view-onboarding" class="p-20 hidden">
+            <div class="step-indicator" id="wizard-steps"></div>
+            <div id="wizard-content"></div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="btn-prev" class="outline hidden">Indietro</button>
+                <button id="btn-next">Avanti</button>
+            </div>
+        </section>
+
+        <!-- DASHBOARD -->
+        <section id="view-dashboard" class="p-20 hidden">
+            <h1>Coach Dashboard</h1>
+            
+            <div class="card" id="daily-action-card">
+                <h3>Oggi</h3>
+                <div id="today-summary">Nessun piano attivo.</div>
+                <button id="btn-go-log" class="sec">📝 Registra Progresso</button>
+                <button id="btn-sync" class="outline">🔄 Sync con Coach AI</button>
+                <div id="last-sync-info" class="sync-badge">Mai sincronizzato</div>
+            </div>
+
+            <div class="card">
+                <h3>Trend Peso (30gg)</h3>
+                <div id="weight-chart" class="chart-container"></div>
+                <div id="weight-kpi" style="display:flex; justify-content: space-between; font-size: 14px;"></div>
+            </div>
+
+            <div class="card">
+                <h3>Pressione (SYS/DIA)</h3>
+                <div id="bp-chart" class="chart-container"></div>
+                <table>
+                    <thead><tr><th>Data</th><th>Peso</th><th>Press.</th></tr></thead>
+                    <tbody id="vitals-table-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- PIANO -->
+        <section id="view-plan" class="p-20 hidden">
+            <h1>Il tuo Piano</h1>
+            <div id="plan-details"></div>
+            <h3>Libreria Esercizi</h3>
+            <div id="exercise-library"></div>
+        </section>
+
+        <!-- LOGGING FORM -->
+        <section id="view-log" class="p-20 hidden">
+            <h1 id="log-date-title">Log del Giorno</h1>
+            <input type="date" id="log-date-picker">
+            
+            <div class="card">
+                <h3>Vitals</h3>
+                <label>Peso (kg)</label>
+                <input type="number" id="log-weight" step="0.1" placeholder="es: 85.5">
+                <label>Pressione (es: 125/80)</label>
+                <input type="text" id="log-bp" placeholder="120/80">
+            </div>
+
+            <div class="card">
+                <h3>Allenamento</h3>
+                <label><input type="checkbox" id="log-workout-done"> Sessione completata?</label>
+                <label>Minuti Tapis Roulant</label>
+                <input type="number" id="log-treadmill-min" placeholder="0">
+                <label>Inclinazione (%)</label>
+                <input type="number" id="log-treadmill-inc" placeholder="0">
+            </div>
+
+            <div class="card">
+                <h3>Benessere</h3>
+                <label>Fame (1-10)</label>
+                <input type="range" id="log-hunger" min="1" max="10">
+                <label>Energia (1-10)</label>
+                <input type="range" id="log-energy" min="1" max="10">
+                <label>Note / Ginocchia / Stress</label>
+                <textarea id="log-notes" rows="3"></textarea>
+            </div>
+            
+            <button id="btn-save-log">Salva Log</button>
+            <button class="outline" onclick="app.showView('dashboard')">Annulla</button>
+        </section>
+
+        <!-- IMPOSTAZIONI -->
+        <section id="view-settings" class="p-20 hidden">
+            <h1>Impostazioni</h1>
+            <div class="card">
+                <h3>OpenAI API</h3>
+                <div class="api-warning">
+                    ⚠️ OpenAI raccomanda di non esporre chiavi in codice client-side. Inserendola qui, la chiave risiede solo in questo browser.
+                </div>
+                <input type="password" id="api-key" placeholder="sk-...">
+                <label><input type="checkbox" id="save-key-db"> Salva chiave localmente</label>
+                <select id="api-model">
+                    <option value="gpt-4o">gpt-4o (Consigliato)</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini (Veloce/Economico)</option>
+                </select>
+            </div>
+
+            <div class="card">
+                <h3>Dati</h3>
+                <button class="outline" id="btn-export">Esporta Backup (JSON)</button>
+                <button class="outline" id="btn-import-trigger">Importa Backup</button>
+                <input type="file" id="import-file" class="hidden" accept=".json">
+            </div>
+            
+            <button class="outline" onclick="app.resetOnboarding()">Ricomincia Onboarding</button>
+        </section>
+    </div>
+
+    <nav id="main-nav" class="hidden">
+        <div onclick="app.showView('dashboard')" id="nav-dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            Home
+        </div>
+        <div onclick="app.showView('plan')" id="nav-plan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Piano
+        </div>
+        <div onclick="app.showView('settings')" id="nav-settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            Impostazioni
+        </div>
+    </nav>
+
+    <script>
+        /** 1. DATABASE ENGINE (IndexedDB) **/
+        const dbName = "benessere_coach_db";
+        const dbVersion = 1;
+        let db;
+
+        const initDB = () => {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(dbName, dbVersion);
+                request.onerror = e => reject(e);
+                request.onsuccess = e => { db = e.target.result; resolve(db); };
+                request.onupgradeneeded = e => {
+                    const d = e.target.result;
+                    if (!d.objectStoreNames.contains('profile')) d.createObjectStore('profile', { keyPath: 'id' });
+                    if (!d.objectStoreNames.contains('plan')) d.createObjectStore('plan', { keyPath: 'id' });
+                    if (!d.objectStoreNames.contains('logs')) d.createObjectStore('logs', { keyPath: 'date' });
+                    if (!d.objectStoreNames.contains('revisions')) d.createObjectStore('revisions', { keyPath: 'revId' });
+                    if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'key' });
+                };
+            });
+        };
+
+        const dbOp = (store, op, data) => {
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(store, op === 'get' || op === 'getAll' ? 'readonly' : 'readwrite');
+                const s = tx.objectStore(store);
+                let request;
+                if (op === 'get') request = s.get(data);
+                else if (op === 'put') request = s.put(data);
+                else if (op === 'getAll') request = s.getAll();
+                else if (op === 'delete') request = s.delete(data);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        };
+
+        /** 2. DATA MODELS & CONSTANTS **/
+        const EXERCISE_LIBRARY = [
+            { id: 'pushup_inc', name: 'Push-up inclinati', cue: 'Mani su un rialzo (tavolo/divano). Corpo dritto, scendi col petto.' },
+            { id: 'chest_floor', name: 'Chest press a terra', cue: 'Sdraiato, spingi i manubri verso l\'alto. Gomiti toccano terra delicatamente.' },
+            { id: 'shoulder_press', name: 'Shoulder press seduto', cue: 'Schiena dritta, spingi pesi sopra la testa senza inarcare il busto.' },
+            { id: 'lat_raise', name: 'Alzate laterali lente', cue: 'Braccia quasi dritte, sali fino all\'altezza spalle e scendi piano.' },
+            { id: 'curl_bic', name: 'Curl bicipiti', cue: 'Palmi in su, fletti il gomito senza oscillare con la schiena.' },
+            { id: 'hammer', name: 'Hammer curl', cue: 'Presa a martello (pollici su), movimento controllato.' },
+            { id: 'tri_ext', name: 'Tricipiti sopra testa', cue: 'Porta il peso dietro la nuca e distendi il braccio verso l\'alto.' },
+            { id: 'dip_chair', name: 'Dip su sedia', cue: 'Mani sul bordo, scendi coi glutei vicino alla sedia, poi risali.' },
+            { id: 'plank_knees', name: 'Plank su ginocchia', cue: 'Gomiti a terra, ginocchia a terra, addome contratto, linea dritta.' },
+            { id: 'dead_bug', name: 'Dead bug', cue: 'Sdraiato, braccia su. Abbassa braccio e gamba opposta lentamente.' },
+            { id: 'treadmill', name: 'Camminata treadmill', cue: 'Mantenere postura eretta, usare inclinazione se indicato.' }
+        ];
+
+        const WIZARD_SCHEMA = [
+            { title: "Dati Base", fields: [
+                { id: 'eta', label: 'Età', type: 'number' },
+                { id: 'sesso', label: 'Sesso', type: 'select', options: ['M', 'F', 'Altro'] },
+                { id: 'altezza', label: 'Altezza (cm)', type: 'number' },
+                { id: 'peso', label: 'Peso Attuale (kg)', type: 'number' },
+                { id: 'lavoro', label: 'Attività Lavorativa', type: 'select', options: ['Sedentaria', 'Leggera', 'Attiva'] }
+            ]},
+            { title: "Obiettivi", fields: [
+                { id: 'target_peso', label: 'Peso Target (kg)', type: 'text', placeholder: 'es: 80kg entro Giugno' },
+                { id: 'priorita', label: 'Priorità', type: 'text', placeholder: 'es: dimagrire, forza' },
+                { id: 'focus', label: 'Focus Muscolare', type: 'text', placeholder: 'es: petto, spalle' }
+            ]},
+            { title: "Salute", fields: [
+                { id: 'pressione_alta', label: 'Hai la pressione alta?', type: 'select', options: ['No', 'Sì'] },
+                { id: 'beta_bloccanti', label: 'Usi farmaci Beta-Bloccanti?', type: 'select', options: ['No', 'Sì'] },
+                { id: 'dolore_ginocchia', label: 'Dolore ginocchia (0-10)', type: 'number', min: 0, max: 10 },
+                { id: 'note_salute', label: 'Altre controindicazioni', type: 'textarea' }
+            ]},
+            { title: "Attrezzatura & Tempo", fields: [
+                { id: 'attrezzatura', label: 'Cosa hai a disposizione?', type: 'text', placeholder: 'es: tappetino, manubri 5kg, tapis roulant' },
+                { id: 'giorni_sett', label: 'Giorni a settimana', type: 'number', min: 1, max: 7 },
+                { id: 'durata_sessione', label: 'Durata media (min)', type: 'select', options: ['20', '30', '45', '60'] }
+            ]},
+            { title: "Alimentazione", fields: [
+                { id: 'pasti_giorno', label: 'Pasti al giorno', type: 'number' },
+                { id: 'dolci_alcol', label: 'Consumo dolci/alcol', type: 'select', options: ['Basso', 'Medio', 'Alto'] },
+                { id: 'aderenza', label: 'Capacità aderenza (1-10)', type: 'number' }
+            ]}
+        ];
+
+        /** 3. CORE APP LOGIC **/
+        const app = {
+            currentStep: 0,
+            profileData: {},
+            
+            async init() {
+                await initDB();
+                this.loadSettings();
+                this.renderExerciseLibrary();
+                
+                const profile = await dbOp('profile', 'get', 'me');
+                if (!profile) {
+                    this.showView('onboarding');
+                    this.renderWizard();
+                } else {
+                    this.profileData = profile;
+                    this.showView('dashboard');
+                    this.refreshDashboard();
+                }
+                this.setupEventListeners();
+            },
+
+            showView(viewId) {
+                document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+                document.getElementById(`view-${viewId}`).classList.remove('hidden');
+                document.querySelectorAll('nav div').forEach(d => d.classList.remove('active'));
+                const navItem = document.getElementById(`nav-${viewId}`);
+                if (navItem) navItem.classList.add('active');
+                if (viewId !== 'onboarding') document.getElementById('main-nav').classList.remove('hidden');
+            },
+
+            // --- Wizard Logic ---
+            renderWizard() {
+                const container = document.getElementById('wizard-content');
+                const stepsHeader = document.getElementById('wizard-steps');
+                const step = WIZARD_SCHEMA[this.currentStep];
+                
+                stepsHeader.innerHTML = WIZARD_SCHEMA.map((_, i) => `<div class="step-dot ${i <= this.currentStep ? 'active' : ''}"></div>`).join('');
+                
+                let html = `<h2>${step.title}</h2>`;
+                step.fields.forEach(f => {
+                    html += `<label>${f.label}</label>`;
+                    if (f.type === 'select') {
+                        html += `<select id="f-${f.id}">${f.options.map(o => `<option value="${o}">${o}</option>`).join('')}</select>`;
+                    } else if (f.type === 'textarea') {
+                        html += `<textarea id="f-${f.id}" placeholder="${f.placeholder || ''}"></textarea>`;
+                    } else {
+                        html += `<input type="${f.type}" id="f-${f.id}" placeholder="${f.placeholder || ''}" min="${f.min||''}" max="${f.max||''}">`;
+                    }
+                });
+                container.innerHTML = html;
+                
+                document.getElementById('btn-prev').classList.toggle('hidden', this.currentStep === 0);
+                document.getElementById('btn-next').innerText = this.currentStep === WIZARD_SCHEMA.length - 1 ? 'Fine' : 'Avanti';
+            },
+
+            async nextStep() {
+                const step = WIZARD_SCHEMA[this.currentStep];
+                step.fields.forEach(f => {
+                    this.profileData[f.id] = document.getElementById(`f-${f.id}`).value;
+                });
+
+                if (this.currentStep < WIZARD_SCHEMA.length - 1) {
+                    this.currentStep++;
+                    this.renderWizard();
+                } else {
+                    this.profileData.id = 'me';
+                    this.profileData.updatedAt = new Date().toISOString();
+                    await dbOp('profile', 'put', this.profileData);
+                    this.showView('dashboard');
+                    this.refreshDashboard();
+                }
+            },
+
+            // --- Dashboard & Charts ---
+            async refreshDashboard() {
+                const logs = await dbOp('logs', 'getAll');
+                const plan = await dbOp('plan', 'get', 'current');
+                
+                // Update Today Card
+                const todayStr = new Date().toISOString().split('T')[0];
+                const todayLog = logs.find(l => l.date === todayStr);
+                
+                if (plan) {
+                    document.getElementById('today-summary').innerHTML = `
+                        <strong>Piano: ${plan.name}</strong><br>
+                        ${todayLog ? '✅ Log completato' : '❌ Log mancante'}
+                    `;
+                    this.renderPlan(plan);
+                }
+
+                this.renderVitalsTable(logs);
+                this.renderWeightChart(logs);
+                this.renderBPChart(logs);
+            },
+
+            renderVitalsTable(logs) {
+                const last30 = logs.sort((a,b) => b.date.localeCompare(a.date)).slice(0, 10);
+                document.getElementById('vitals-table-body').innerHTML = last30.map(l => `
+                    <tr>
+                        <td>${l.date.slice(5)}</td>
+                        <td>${l.weight || '-'}</td>
+                        <td>${l.bp || '-'}</td>
+                    </tr>
+                `).join('');
+            },
+
+            renderWeightChart(logs) {
+                const data = logs.filter(l => l.weight).sort((a,b) => a.date.localeCompare(b.date)).slice(-30);
+                if (data.length < 2) return;
+                
+                const weights = data.map(d => parseFloat(d.weight));
+                const min = Math.min(...weights) - 1;
+                const max = Math.max(...weights) + 1;
+                const points = data.map((d, i) => {
+                    const x = (i / (data.length - 1)) * 100;
+                    const y = 100 - ((parseFloat(d.weight) - min) / (max - min)) * 100;
+                    return `${x}% ${y}%`;
+                }).join(', ');
+
+                document.getElementById('weight-chart').innerHTML = `
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%; height:100%">
+                        <polyline points="${points}" stroke="#00e676" />
+                    </svg>
+                `;
+                const delta = (weights[weights.length-1] - weights[0]).toFixed(1);
+                document.getElementById('weight-kpi').innerHTML = `<span>Oggi: ${weights[weights.length-1]}kg</span> <span>Delta: ${delta > 0 ? '+' : ''}${delta}kg</span>`;
+            },
+
+            renderBPChart(logs) {
+                const data = logs.filter(l => l.bp && l.bp.includes('/')).sort((a,b) => a.date.localeCompare(b.date)).slice(-14);
+                if (data.length < 2) return;
+
+                const sysValues = data.map(d => parseInt(d.bp.split('/')[0]));
+                const pointsSys = data.map((d, i) => `${(i/(data.length-1))*100}% ${100 - ((parseInt(d.bp.split('/')[0]) - 80) / 100) * 100}%`).join(', ');
+
+                document.getElementById('bp-chart').innerHTML = `
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%; height:100%">
+                        <polyline points="${pointsSys}" stroke="#2979ff" />
+                    </svg>
+                `;
+            },
+
+            renderPlan(plan) {
+                const container = document.getElementById('plan-details');
+                let html = `<div class="card"><h3>${plan.name}</h3><p>${plan.assumptions || ''}</p></div>`;
+                
+                if (plan.safety_rules) {
+                    html += `<div class="card" style="border-color: var(--danger)"><h3>⚠️ Regole Sicurezza</h3><ul>`;
+                    plan.safety_rules.forEach(r => html += `<li>${r}</li>`);
+                    html += `</ul></div>`;
+                }
+
+                if (plan.weekly_structure) {
+                    html += `<h3>Struttura Settimanale</h3>`;
+                    for (const [day, activity] of Object.entries(plan.weekly_structure)) {
+                        html += `<div class="exercise-item"><strong>${day}:</strong> ${activity}</div>`;
+                    }
+                }
+                
+                if (plan.nutrition_guidelines) {
+                    html += `<div class="card"><h3>Nutrizione</h3><p>${plan.nutrition_guidelines}</p></div>`;
+                }
+
+                container.innerHTML = html;
+            },
+
+            renderExerciseLibrary() {
+                const container = document.getElementById('exercise-library');
+                container.innerHTML = EXERCISE_LIBRARY.map(ex => `
+                    <div class="exercise-item">
+                        <strong>${ex.name}</strong><br>
+                        ${ex.cue}
+                    </div>
+                `).join('');
+            },
+
+            // --- API / Coach Sync ---
+            async syncWithCoach() {
+                const apiKey = document.getElementById('api-key').value;
+                if (!apiKey) return alert("Inserisci la API Key nelle impostazioni!");
+
+                const btn = document.getElementById('btn-sync');
+                btn.disabled = true;
+                btn.innerText = "Chiamata AI in corso...";
+
+                try {
+                    const plan = await dbOp('plan', 'get', 'current');
+                    const logs = await dbOp('logs', 'getAll');
+                    const recentLogs = logs.sort((a,b) => b.date.localeCompare(a.date)).slice(0, 7);
+                    
+                    const systemPrompt = `Sei un Coach AI esperto in fitness e nutrizione. 
+                    Lavori con utenti che potrebbero avere ipertensione o usare beta-bloccanti. 
+                    Regole: 1. Sii conservativo. 2. Se l'utente ha la pressione alta, dai priorità al talk-test. 
+                    3. Rispondi SEMPRE E SOLO con un oggetto JSON valido.`;
+
+                    const userPrompt = plan 
+                        ? `Analizza questi ultimi log: ${JSON.stringify(recentLogs)}. 
+                           Il piano attuale è: ${JSON.stringify(plan)}. 
+                           Il profilo utente è: ${JSON.stringify(this.profileData)}.
+                           Produci piccoli aggiustamenti se necessari (max 5-10% variazione volume). 
+                           Restituisci JSON con chiavi: today_feedback, changes (stringa), updated_plan (oggetto piano completo se cambiato, altrimenti null).`
+                        : `Genera un piano iniziale basato su questo profilo: ${JSON.stringify(this.profileData)}. 
+                           Usa il formato JSON richiesto: {name, assumptions, safety_rules[], weekly_structure{}, workout_templates{}, nutrition_guidelines, success_metrics[]}.`;
+
+                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            model: document.getElementById('api-model').value,
+                            messages: [
+                                { role: 'system', content: systemPrompt },
+                                { role: 'user', content: userPrompt }
+                            ],
+                            response_format: { type: "json_object" }
+                        })
+                    });
+
+                    const result = await response.json();
+                    const coachMsg = JSON.parse(result.choices[0].message.content);
+
+                    if (coachMsg.name || (coachMsg.updated_plan)) {
+                        const finalPlan = coachMsg.updated_plan || coachMsg;
+                        finalPlan.id = 'current';
+                        await dbOp('plan', 'put', finalPlan);
+                        alert("Nuovo piano ricevuto e salvato!");
+                    } else if (coachMsg.today_feedback) {
+                        alert("Feedback Coach: " + coachMsg.today_feedback);
+                    }
+
+                    document.getElementById('last-sync-info').innerText = "Sincronizzato: " + new Date().toLocaleTimeString();
+                    this.refreshDashboard();
+                } catch (err) {
+                    console.error(err);
+                    alert("Errore durante la sincronizzazione: " + err.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = "🔄 Sync con Coach AI";
+                }
+            },
+
+            // --- Settings & Import/Export ---
+            async loadSettings() {
+                const key = await dbOp('settings', 'get', 'openai_api_key');
+                if (key) {
+                    document.getElementById('api-key').value = key.value;
+                    document.getElementById('save-key-db').checked = true;
+                }
+            },
+
+            async exportData() {
+                const data = {
+                    profile: await dbOp('profile', 'get', 'me'),
+                    plan: await dbOp('plan', 'get', 'current'),
+                    logs: await dbOp('logs', 'getAll'),
+                    revisions: await dbOp('revisions', 'getAll'),
+                    exportedAt: new Date().toISOString()
+                };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `coach_backup_${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+            },
+
+            async importData(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const data = JSON.parse(event.target.result);
+                    if (data.profile) await dbOp('profile', 'put', data.profile);
+                    if (data.plan) await dbOp('plan', 'put', data.plan);
+                    if (data.logs) {
+                        for (const log of data.logs) await dbOp('logs', 'put', log);
+                    }
+                    alert("Dati importati con successo!");
+                    location.reload();
+                };
+                reader.readAsText(file);
+            },
+
+            async resetOnboarding() {
+                if(confirm("Vuoi davvero resettare tutto il profilo?")) {
+                    await dbOp('profile', 'delete', 'me');
+                    location.reload();
+                }
+            },
+
+            setupEventListeners() {
+                document.getElementById('btn-next').onclick = () => this.nextStep();
+                document.getElementById('btn-prev').onclick = () => { this.currentStep--; this.renderWizard(); };
+                
+                document.getElementById('btn-go-log').onclick = () => {
+                    document.getElementById('log-date-picker').value = new Date().toISOString().split('T')[0];
+                    this.showView('log');
+                };
+
+                document.getElementById('btn-save-log').onclick = async () => {
+                    const date = document.getElementById('log-date-picker').value;
+                    const log = {
+                        date,
+                        weight: document.getElementById('log-weight').value,
+                        bp: document.getElementById('log-bp').value,
+                        workout_done: document.getElementById('log-workout-done').checked,
+                        treadmill_min: document.getElementById('log-treadmill-min').value,
+                        treadmill_inc: document.getElementById('log-treadmill-inc').value,
+                        hunger: document.getElementById('log-hunger').value,
+                        energy: document.getElementById('log-energy').value,
+                        notes: document.getElementById('log-notes').value
+                    };
+                    await dbOp('logs', 'put', log);
+                    this.showView('dashboard');
+                    this.refreshDashboard();
+                };
+
+                document.getElementById('btn-sync').onclick = () => this.syncWithCoach();
+                
+                document.getElementById('api-key').onchange = async (e) => {
+                    if (document.getElementById('save-key-db').checked) {
+                        await dbOp('settings', 'put', { key: 'openai_api_key', value: e.target.value });
+                    }
+                };
+
+                document.getElementById('btn-export').onclick = () => this.exportData();
+                document.getElementById('btn-import-trigger').onclick = () => document.getElementById('import-file').click();
+                document.getElementById('import-file').onchange = (e) => this.importData(e);
+            }
+        };
+
+        // Boot
+        window.onload = () => app.init();
+    </script>
+</body>
+</html>
