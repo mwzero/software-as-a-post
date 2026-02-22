@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Benessere Tracker (local-first)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; background: #0b0f14; color: #e8eef7; }
+    header { padding: 16px; border-bottom: 1px solid #1b2636; background: #0b0f14; position: sticky; top: 0; }
+    h1 { margin: 0; font-size: 18px; }
+    main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 1.2fr 0.8fr; }
+    @media (max-width: 900px){ main { grid-template-columns: 1fr; } }
+    .card { background: #0f1622; border: 1px solid #1b2636; border-radius: 14px; padding: 14px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    label { font-size: 12px; color: #b9c6da; display: block; margin-bottom: 6px; }
+    input, textarea, select {
+      width: 100%; box-sizing: border-box;
+      background: #0b111b; border: 1px solid #263448; color: #e8eef7;
+      border-radius: 10px; padding: 10px; outline: none;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    button {
+      background: #1b6ef3; border: 0; color: white; padding: 10px 12px;
+      border-radius: 10px; cursor: pointer; font-weight: 600;
+    }
+    button.secondary { background: #223248; color: #e8eef7; }
+    button.danger { background: #c0392b; }
+    .btnbar { display: flex; gap: 8px; flex-wrap: wrap; }
+    .muted { color: #b9c6da; font-size: 12px; }
+    .kpi { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .kpi > div { background:#0b111b; border:1px solid #263448; border-radius: 12px; padding: 10px; }
+    .kpi strong { font-size: 16px; }
+    .list { display: grid; gap: 10px; }
+    .entry { border: 1px solid #263448; background: #0b111b; border-radius: 12px; padding: 10px; }
+    .entry header { position: static; background: transparent; border: 0; padding: 0; margin-bottom: 8px; }
+    .pill { display:inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #263448; background:#0f1622; }
+    .ok { border-color: #2ecc71; }
+    .warn { border-color: #f1c40f; }
+    .bad { border-color: #e74c3c; }
+    code, pre { background:#0b111b; border:1px solid #263448; border-radius: 12px; padding: 10px; color:#e8eef7; overflow:auto; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    details summary { cursor: pointer; }
+    hr { border:0; border-top:1px solid #1b2636; margin:14px 0; }
+    .mini-chart { background:#0b111b; border:1px solid #263448; border-radius: 12px; padding: 10px; }
+    .table { width:100%; border-collapse: collapse; }
+    .table th, .table td { border-bottom: 1px solid #1b2636; padding: 6px; text-align:left; font-size: 12px; color:#e8eef7; }
+    .table th { color:#b9c6da; font-weight: 600; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Benessere Tracker (local-first) • dati sul dispositivo</h1>
+  <div class="muted">Log giornaliero + export/import + testo pronto da incollare in chat + trend peso/pressione</div>
+</header>
+
+<main>
+  <!-- LEFT -->
+  <section class="card">
+    <h2 style="margin:0 0 10px 0; font-size:16px;">1) Log Giornaliero</h2>
+
+    <div class="row">
+      <div>
+        <label>Data</label>
+        <input id="date" type="date" />
+      </div>
+      <div>
+        <label>Peso (kg) (consigliato 1 volta/settimana, mattina a digiuno)</label>
+        <input id="weight" type="number" step="0.1" placeholder="es. 124.2" />
+      </div>
+    </div>
+
+    <div class="row3" style="margin-top:10px;">
+      <div>
+        <label>Allenamento forza oggi?</label>
+        <select id="strengthDone">
+          <option value="no">No</option>
+          <option value="yes">Sì</option>
+        </select>
+      </div>
+      <div>
+        <label>Treadmill (minuti)</label>
+        <input id="cardioMin" type="number" step="1" placeholder="es. 30" />
+      </div>
+      <div>
+        <label>Inclinazione treadmill (%)</label>
+        <input id="incline" type="number" step="0.5" placeholder="es. 3" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Alimentazione (cosa hai fatto bene / male)</label>
+        <textarea id="foodNotes" placeholder="es. pranzo ok; a cena 2 fette pane; niente dolci"></textarea>
+      </div>
+      <div>
+        <label>Sostituzioni (es. “ho mangiato X al posto di Y”)</label>
+        <textarea id="swaps" placeholder="es. ho preso pizza invece di pollo+verdure"></textarea>
+      </div>
+    </div>
+
+    <div class="row3" style="margin-top:10px;">
+      <div>
+        <label>Fame (1–10)</label>
+        <input id="hunger" type="number" min="1" max="10" step="1" placeholder="1..10" />
+      </div>
+      <div>
+        <label>Energia (1–10)</label>
+        <input id="energy" type="number" min="1" max="10" step="1" placeholder="1..10" />
+      </div>
+      <div>
+        <label>Pressione (opz.) (formato: 120/80)</label>
+        <input id="bp" type="text" placeholder="es. 125/80" />
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Note (sonno, stress, ginocchia, ecc.)</label>
+      <textarea id="notes" placeholder="es. ginocchia rigide dopo tante ore seduto; sonno 6h"></textarea>
+    </div>
+
+    <details style="margin-top:10px;">
+      <summary class="muted">Seleziona esercizi svolti (con descrizione breve)</summary>
+      <div class="row" style="margin-top:10px;">
+        <div>
+          <label>Esercizi (clicca per aggiungere)</label>
+          <select id="exercisePicker">
+            <option value="">— scegli un esercizio —</option>
+          </select>
+          <div class="muted" style="margin-top:6px;">Ogni esercizio aggiunto viene salvato nel log di oggi.</div>
+        </div>
+        <div>
+          <label>Lista esercizi di oggi</label>
+          <textarea id="exerciseList" placeholder="(si riempie con il selettore)"></textarea>
+        </div>
+      </div>
+    </details>
+
+    <div class="btnbar" style="margin-top:12px;">
+      <button id="saveBtn">Salva / Aggiorna Giorno</button>
+      <button class="secondary" id="copyChatBtn">Copia per Chat</button>
+      <button class="secondary" id="clearFormBtn">Pulisci campi</button>
+    </div>
+
+    <hr />
+
+    <h2 style="margin:0 0 10px 0; font-size:16px;">2) Piano corrente (importabile)</h2>
+    <div class="muted">Incolla il piano JSON che ti mando in chat (“Piano aggiornato JSON”).</div>
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Import Piano JSON</label>
+        <textarea id="planImport" placeholder='Incolla qui JSON, poi “Importa Piano”'></textarea>
+        <div class="btnbar" style="margin-top:8px;">
+          <button class="secondary" id="importPlanBtn">Importa Piano</button>
+          <button class="secondary" id="exportPlanBtn">Esporta Piano</button>
+        </div>
+      </div>
+      <div>
+        <label>Piano attuale (preview)</label>
+        <pre id="planPreview">(nessun piano importato)</pre>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- RIGHT -->
+  <aside class="card">
+    <h2 style="margin:0 0 10px 0; font-size:16px;">Cruscotto</h2>
+
+    <div class="kpi">
+      <div><div class="muted">Settimana: cardio fatti</div><strong id="kpiCardio">0</strong></div>
+      <div><div class="muted">Settimana: forza fatta</div><strong id="kpiStrength">0</strong></div>
+      <div><div class="muted">Media fame (7g)</div><strong id="kpiHunger">-</strong></div>
+    </div>
+
+    <div class="kpi" style="margin-top:10px;">
+      <div><div class="muted">Media energia (7g)</div><strong id="kpiEnergy">-</strong></div>
+      <div><div class="muted">Peso (ultimo)</div><strong id="kpiWeight">-</strong></div>
+      <div><div class="muted">Giornate OK (2 su 3)</div><strong id="kpiOkDays">0</strong></div>
+    </div>
+
+    <div class="kpi" style="margin-top:10px;">
+      <div><div class="muted">Δ Peso (30g)</div><strong id="kpiWeightDelta30">-</strong></div>
+      <div><div class="muted">Media pressione (7g)</div><strong id="kpiBpAvg7">-</strong></div>
+      <div><div class="muted">Ultima pressione</div><strong id="kpiBpLast">-</strong></div>
+    </div>
+
+    <hr />
+
+    <h2 style="margin:0 0 10px 0; font-size:16px;">Trend Peso & Pressione</h2>
+    <div class="muted">Grafici semplici (ultimi 30 giorni con dati disponibili).</div>
+
+    <div class="mini-chart" style="margin-top:10px;">
+      <div class="muted" style="margin-bottom:6px;">Peso (kg)</div>
+      <div id="weightChart"></div>
+    </div>
+
+    <div class="mini-chart" style="margin-top:10px;">
+      <div class="muted" style="margin-bottom:6px;">Pressione (sistolica/diastolica)</div>
+      <div id="bpChart"></div>
+    </div>
+
+    <div class="mini-chart" style="margin-top:10px;">
+      <div class="muted" style="margin-bottom:6px;">Tabella (ultimi 30 giorni)</div>
+      <div style="overflow:auto; max-height: 260px;">
+        <table class="table" id="vitalsTable">
+          <thead>
+            <tr><th>Data</th><th>Peso</th><th>Pressione</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <hr />
+
+    <h2 style="margin:0 0 10px 0; font-size:16px;">Storico (ultimi 14 giorni)</h2>
+    <div class="muted">Clicca una voce per ricaricare il giorno nel form.</div>
+    <div id="history" class="list"></div>
+
+    <hr />
+
+    <h2 style="margin:0 0 10px 0; font-size:16px;">Backup dati</h2>
+    <div class="btnbar">
+      <button class="secondary" id="exportDataBtn">Esporta Tutto (JSON)</button>
+      <button class="secondary" id="importDataBtn">Importa Tutto (JSON)</button>
+      <button class="danger" id="wipeBtn">Cancella Tutto</button>
+    </div>
+    <input id="fileInput" type="file" accept="application/json" style="display:none;" />
+    <div class="muted" style="margin-top:8px;">
+      Consiglio: esporta 1 volta a settimana e salva il file (WhatsApp a te stesso / Drive / PC).
+    </div>
+
+    <hr />
+    <details>
+      <summary class="muted">Esercizi: descrizioni brevi</summary>
+      <div id="exerciseHelp" class="muted" style="margin-top:10px;"></div>
+    </details>
+  </aside>
+</main>
+
+<script>
+  const KEY_LOGS = "benessere.logs.v1";
+  const KEY_PLAN = "benessere.plan.v1";
+
+  const EX = {
+    "Push-up inclinati": "Mani su tavolo/divano. Corpo in linea. Scendi controllato, spingi espirando. 8–12 rip.",
+    "Chest press a terra": "Sdraiato, gomiti 45°. Spingi i manubri verso l’alto espirando. Lento in discesa (2–3s).",
+    "Shoulder press seduto": "Seduto, schiena neutra. Spingi sopra la testa senza inarcare. Espira in salita.",
+    "Alzate laterali lente": "Braccia semi-distese, alza fino a spalle. Poco slancio, 2–3s discesa.",
+    "Curl bicipiti": "Gomiti fermi vicino al corpo. Salita controllata, discesa lenta.",
+    "Hammer curl": "Pollici verso l’alto. Movimento corto e controllato, niente dondolio.",
+    "Tricipiti sopra testa": "Un manubrio, gomiti stretti. Estendi espirando. Lento in discesa.",
+    "Dip su sedia (facile)": "Mani su sedia, piedi vicini. Scendi poco, risali espirando. Stop se fastidio spalle.",
+    "Plank su ginocchia": "Avambracci a terra, addome attivo. 20–40s respirando.",
+    "Dead bug": "Schiena a terra, addome attivo. Estendi arto opposto lentamente senza staccare la schiena.",
+    "Camminata treadmill": "Passo sostenuto, talk-test ok. Inclinazione 2–5%. 20–35 min.",
+    "Defaticamento": "5 min camminata lenta + respirazione. Riduce stress e aiuta pressione."
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const todayISO = () => new Date().toISOString().slice(0,10);
+
+  function loadLogs() {
+    try { return JSON.parse(localStorage.getItem(KEY_LOGS) || "{}"); }
+    catch { return {}; }
+  }
+  function saveLogs(logs) {
+    localStorage.setItem(KEY_LOGS, JSON.stringify(logs));
+  }
+  function loadPlan() {
+    try { return JSON.parse(localStorage.getItem(KEY_PLAN) || "null"); }
+    catch { return null; }
+  }
+  function savePlan(plan) {
+    localStorage.setItem(KEY_PLAN, JSON.stringify(plan));
+  }
+
+  function weekKey(d) {
+    const date = new Date(d + "T00:00:00");
+    const day = (date.getDay() + 6) % 7; // Mon=0
+    date.setDate(date.getDate() - day);
+    return date.toISOString().slice(0,10);
+  }
+
+  function classifyDay(entry) {
+    const movement = (Number(entry.cardioMin||0) >= 20) || entry.strengthDone === "yes";
+    const food = (entry.foodNotes||"").toLowerCase();
+    const proteinOk = food.includes("pollo") || food.includes("uova") || food.includes("yogurt") || food.includes("tonno") || food.includes("legumi") || food.includes("carne") || food.includes("pesce");
+    const carbsOk = !(food.includes("dolce") || food.includes("pizza") || food.includes("bibita") || food.includes("fritto"));
+    let score = 0;
+    if (movement) score++;
+    if (proteinOk) score++;
+    if (carbsOk) score++;
+    return { score, movement, proteinOk, carbsOk };
+  }
+
+  // ---- Pressione parsing: "120/80" -> {sys:120, dia:80}
+  function parseBP(s) {
+    if (!s) return null;
+    const m = String(s).trim().match(/^(\d{2,3})\s*\/\s*(\d{2,3})$/);
+    if (!m) return null;
+    const sys = Number(m[1]), dia = Number(m[2]);
+    if (!isFinite(sys) || !isFinite(dia)) return null;
+    return { sys, dia };
+  }
+
+  // ---- Mini SVG chart (no libs)
+  function svgLineChart(points, opts) {
+    // points: [{xLabel, y}] assumed in order
+    const W = opts?.w ?? 520;
+    const H = opts?.h ?? 140;
+    const pad = 24;
+    if (!points.length) return `<div class="muted">Nessun dato.</div>`;
+
+    const ys = points.map(p => p.y);
+    let minY = Math.min(...ys), maxY = Math.max(...ys);
+    if (minY === maxY) { minY -= 1; maxY += 1; }
+
+    const xStep = (W - pad*2) / Math.max(1, points.length - 1);
+    const scaleY = (y) => {
+      const t = (y - minY) / (maxY - minY);
+      return (H - pad) - t * (H - pad*2);
+    };
+
+    const path = points.map((p, i) => {
+      const x = pad + i * xStep;
+      const y = scaleY(p.y);
+      return `${i===0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(" ");
+
+    const dots = points.map((p,i) => {
+      const x = pad + i * xStep;
+      const y = scaleY(p.y);
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="#e8eef7" opacity="0.9"></circle>`;
+    }).join("");
+
+    const last = points[points.length-1];
+    const label = `${last.y}`;
+
+    return `
+      <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-label="chart">
+        <rect x="0" y="0" width="${W}" height="${H}" fill="transparent"></rect>
+        <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="#263448" />
+        <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="#263448" />
+        <path d="${path}" fill="none" stroke="#e8eef7" stroke-width="2.2" />
+        ${dots}
+        <text x="${W-pad}" y="${pad}" text-anchor="end" fill="#b9c6da" font-size="12">min ${minY.toFixed(1)} • max ${maxY.toFixed(1)}</text>
+        <text x="${W-pad}" y="${pad+16}" text-anchor="end" fill="#b9c6da" font-size="12">ultimo: ${label}</text>
+      </svg>
+    `;
+  }
+
+  function svgDualLineChart(pointsA, pointsB, opts) {
+    // pointsA/B aligned by index length
+    const W = opts?.w ?? 520;
+    const H = opts?.h ?? 140;
+    const pad = 24;
+    const n = Math.min(pointsA.length, pointsB.length);
+    if (!n) return `<div class="muted">Nessun dato.</div>`;
+
+    const ys = [...pointsA.slice(0,n).map(p=>p.y), ...pointsB.slice(0,n).map(p=>p.y)];
+    let minY = Math.min(...ys), maxY = Math.max(...ys);
+    if (minY === maxY) { minY -= 1; maxY += 1; }
+
+    const xStep = (W - pad*2) / Math.max(1, n - 1);
+    const scaleY = (y) => {
+      const t = (y - minY) / (maxY - minY);
+      return (H - pad) - t * (H - pad*2);
+    };
+
+    const mkPath = (pts) => pts.slice(0,n).map((p,i)=>{
+      const x = pad + i * xStep;
+      const y = scaleY(p.y);
+      return `${i===0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(" ");
+
+    const pathA = mkPath(pointsA);
+    const pathB = mkPath(pointsB);
+
+    const lastA = pointsA[n-1]?.y;
+    const lastB = pointsB[n-1]?.y;
+
+    return `
+      <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-label="chart">
+        <rect x="0" y="0" width="${W}" height="${H}" fill="transparent"></rect>
+        <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="#263448" />
+        <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="#263448" />
+        <path d="${pathA}" fill="none" stroke="#e8eef7" stroke-width="2.2" />
+        <path d="${pathB}" fill="none" stroke="#9cc2ff" stroke-width="2.2" />
+        <text x="${pad}" y="${pad}" text-anchor="start" fill="#b9c6da" font-size="12">SYS (chiaro) • DIA (blu)</text>
+        <text x="${W-pad}" y="${pad}" text-anchor="end" fill="#b9c6da" font-size="12">min ${minY} • max ${maxY}</text>
+        <text x="${W-pad}" y="${pad+16}" text-anchor="end" fill="#b9c6da" font-size="12">ultimo: ${lastA ?? "-"} / ${lastB ?? "-"}</text>
+      </svg>
+    `;
+  }
+
+  function initExercisePicker() {
+    const sel = $("exercisePicker");
+    Object.keys(EX).forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+
+    $("exerciseHelp").innerHTML = Object.entries(EX)
+      .map(([k,v]) => `<div style="margin-bottom:8px;"><span class="pill">${k}</span><div class="muted" style="margin-top:4px;">${v}</div></div>`)
+      .join("");
+  }
+
+  function setFormFromEntry(date, entry) {
+    $("date").value = date;
+    $("weight").value = entry.weight ?? "";
+    $("strengthDone").value = entry.strengthDone ?? "no";
+    $("cardioMin").value = entry.cardioMin ?? "";
+    $("incline").value = entry.incline ?? "";
+    $("foodNotes").value = entry.foodNotes ?? "";
+    $("swaps").value = entry.swaps ?? "";
+    $("hunger").value = entry.hunger ?? "";
+    $("energy").value = entry.energy ?? "";
+    $("bp").value = entry.bp ?? "";
+    $("notes").value = entry.notes ?? "";
+    $("exerciseList").value = (entry.exercises || []).map(x => `- ${x.name}: ${x.desc}`).join("\n");
+  }
+
+  function getEntryFromForm() {
+    const date = $("date").value || todayISO();
+    const exList = $("exerciseList").value.trim();
+    const exercises = exList
+      ? exList.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
+          const m = line.replace(/^-+\s*/,'').split(":");
+          const name = (m[0]||"").trim();
+          const desc = (m.slice(1).join(":")||"").trim() || (EX[name] || "");
+          return { name, desc };
+        })
+      : [];
+
+    return {
+      date,
+      weight: $("weight").value ? Number($("weight").value) : null,
+      strengthDone: $("strengthDone").value,
+      cardioMin: $("cardioMin").value ? Number($("cardioMin").value) : 0,
+      incline: $("incline").value ? Number($("incline").value) : null,
+      foodNotes: $("foodNotes").value.trim(),
+      swaps: $("swaps").value.trim(),
+      hunger: $("hunger").value ? Number($("hunger").value) : null,
+      energy: $("energy").value ? Number($("energy").value) : null,
+      bp: $("bp").value.trim(),
+      notes: $("notes").value.trim(),
+      exercises
+    };
+  }
+
+  function clearForm(keepDate=true) {
+    const d = keepDate ? ($("date").value || todayISO()) : todayISO();
+    $("date").value = d;
+    ["weight","cardioMin","incline","foodNotes","swaps","hunger","energy","bp","notes","exerciseList"].forEach(id => $(id).value = "");
+    $("strengthDone").value = "no";
+  }
+
+  function renderPlan() {
+    const plan = loadPlan();
+    $("planPreview").textContent = plan ? JSON.stringify(plan, null, 2) : "(nessun piano importato)";
+  }
+
+  function computeVitalsSeries(days=30) {
+    const logs = loadLogs();
+    const dates = Object.keys(logs).sort(); // asc
+    const cutoff = new Date(todayISO()+"T00:00:00");
+    cutoff.setDate(cutoff.getDate() - (days-1));
+    const series = [];
+
+    for (const d of dates) {
+      const dt = new Date(d+"T00:00:00");
+      if (dt < cutoff) continue;
+      const e = logs[d];
+      const bp = parseBP(e.bp);
+      series.push({
+        date: d,
+        weight: (e.weight != null ? Number(e.weight) : null),
+        bpSys: bp ? bp.sys : null,
+        bpDia: bp ? bp.dia : null
+      });
+    }
+    return series;
+  }
+
+  function renderVitalsTrend() {
+    const series = computeVitalsSeries(30);
+
+    // Table
+    const tbody = $("vitalsTable").querySelector("tbody");
+    tbody.innerHTML = "";
+    [...series].reverse().forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.date}</td>
+        <td>${r.weight != null ? r.weight.toFixed(1)+" kg" : "-"}</td>
+        <td>${(r.bpSys!=null && r.bpDia!=null) ? `${r.bpSys}/${r.bpDia}` : "-"}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Weight chart points (only days where weight exists)
+    const wPts = series.filter(r => r.weight != null).map(r => ({ xLabel: r.date, y: r.weight }));
+    $("weightChart").innerHTML = wPts.length >= 2 ? svgLineChart(wPts, {h:140}) : `<div class="muted">Inserisci almeno 2 misurazioni peso per vedere il trend.</div>`;
+
+    // BP charts (only days with both values)
+    const b = series.filter(r => r.bpSys!=null && r.bpDia!=null);
+    const sysPts = b.map(r => ({ xLabel: r.date, y: r.bpSys }));
+    const diaPts = b.map(r => ({ xLabel: r.date, y: r.bpDia }));
+    $("bpChart").innerHTML = b.length >= 2 ? svgDualLineChart(sysPts, diaPts, {h:140}) : `<div class="muted">Inserisci almeno 2 misurazioni pressione (es. 125/80) per vedere il trend.</div>`;
+  }
+
+  function renderHistoryAndKPI() {
+    const logs = loadLogs();
+    const dates = Object.keys(logs).sort().reverse();
+    const last14 = dates.slice(0,14);
+
+    const history = $("history");
+    history.innerHTML = "";
+
+    const now = todayISO();
+    const wk = weekKey(now);
+
+    let cardioCount = 0, strengthCount = 0;
+    let hunger7 = [], energy7 = [];
+    let okDays = 0;
+
+    // latest weight + weight 30 days ago-ish
+    let lastWeight = null;
+    let weightOldest30 = null;
+
+    // bp last + avg 7 days
+    let lastBp = null;
+    let bp7 = [];
+
+    // Build sorted asc for 7d window
+    const ascDates = Object.keys(logs).sort();
+    const last7 = ascDates.slice(-7);
+
+    // Collect 7 day hunger/energy/bp
+    for (const d of last7) {
+      const e = logs[d];
+      if (e?.hunger != null) hunger7.push(e.hunger);
+      if (e?.energy != null) energy7.push(e.energy);
+      const bp = parseBP(e?.bp);
+      if (bp) bp7.push(bp);
+    }
+
+    // For weekly counts + okDays + lastWeight/lastBp
+    for (const d of dates) {
+      const e = logs[d];
+      if (e && e.weight != null && lastWeight == null) lastWeight = Number(e.weight);
+      const bp = parseBP(e?.bp);
+      if (bp && lastBp == null) lastBp = bp;
+
+      if (weekKey(d) === wk) {
+        if ((e.cardioMin||0) >= 20) cardioCount++;
+        if (e.strengthDone === "yes") strengthCount++;
+      }
+
+      const cls = classifyDay(e);
+      if (cls.score >= 2) okDays++;
+    }
+
+    // weight delta 30 days: use earliest in last 30 that has weight
+    const s30 = computeVitalsSeries(30).filter(r => r.weight != null);
+    if (s30.length) weightOldest30 = s30[0].weight;
+
+    $("kpiCardio").textContent = cardioCount;
+    $("kpiStrength").textContent = strengthCount;
+    $("kpiHunger").textContent = hunger7.length ? (hunger7.reduce((a,b)=>a+b,0)/hunger7.length).toFixed(1) : "-";
+    $("kpiEnergy").textContent = energy7.length ? (energy7.reduce((a,b)=>a+b,0)/energy7.length).toFixed(1) : "-";
+    $("kpiWeight").textContent = lastWeight != null ? `${lastWeight.toFixed(1)} kg` : "-";
+    $("kpiOkDays").textContent = okDays;
+
+    if (lastWeight != null && weightOldest30 != null) {
+      const delta = lastWeight - weightOldest30;
+      const sign = delta > 0 ? "+" : "";
+      $("kpiWeightDelta30").textContent = `${sign}${delta.toFixed(1)} kg`;
+    } else {
+      $("kpiWeightDelta30").textContent = "-";
+    }
+
+    if (bp7.length) {
+      const avgSys = bp7.reduce((a,b)=>a+b.sys,0)/bp7.length;
+      const avgDia = bp7.reduce((a,b)=>a+b.dia,0)/bp7.length;
+      $("kpiBpAvg7").textContent = `${avgSys.toFixed(0)}/${avgDia.toFixed(0)}`;
+    } else {
+      $("kpiBpAvg7").textContent = "-";
+    }
+
+    $("kpiBpLast").textContent = lastBp ? `${lastBp.sys}/${lastBp.dia}` : "-";
+
+    last14.forEach(d => {
+      const e = logs[d];
+      const cls = classifyDay(e);
+      const pillClass = cls.score >= 2 ? "ok" : (cls.score === 1 ? "warn" : "bad");
+      const div = document.createElement("div");
+      div.className = "entry";
+      div.innerHTML = `
+        <header>
+          <strong>${d}</strong>
+          <span class="pill ${pillClass}" style="margin-left:8px;">score ${cls.score}/3</span>
+          ${e.weight!=null ? `<span class="pill" style="margin-left:6px;">${Number(e.weight).toFixed(1)}kg</span>` : ""}
+          ${(e.cardioMin||0) ? `<span class="pill" style="margin-left:6px;">treadmill ${e.cardioMin}m${e.incline!=null?` @${e.incline}%`:""}</span>` : ""}
+          ${e.strengthDone==="yes" ? `<span class="pill" style="margin-left:6px;">forza</span>` : ""}
+          ${parseBP(e.bp) ? `<span class="pill" style="margin-left:6px;">BP ${e.bp}</span>` : ""}
+        </header>
+        <div class="muted">${(e.foodNotes||"").slice(0,140)}${(e.foodNotes||"").length>140?"…":""}</div>
+      `;
+      div.style.cursor = "pointer";
+      div.onclick = () => setFormFromEntry(d, e);
+      history.appendChild(div);
+    });
+
+    if (!last14.length) {
+      history.innerHTML = `<div class="muted">Nessun dato ancora. Inizia salvando il log di oggi.</div>`;
+    }
+
+    renderVitalsTrend();
+  }
+
+  function copyForChat() {
+    const entry = getEntryFromForm();
+    const plan = loadPlan();
+
+    const cls = classifyDay(entry);
+    const exNames = (entry.exercises||[]).map(x => x.name).join(", ");
+
+    const text =
+`BENESSERE-LOG v1
+Data: ${entry.date}
+Peso: ${entry.weight!=null ? entry.weight + " kg" : "(n/d)"}
+Pressione: ${entry.bp || "(n/d)"}  (beta-bloccanti: intensità con talk-test)
+Allenamento: forza=${entry.strengthDone} ; treadmill=${entry.cardioMin||0} min${entry.incline!=null?` @${entry.incline}%`:""}
+Esercizi: ${exNames || "(n/d)"}
+Alimentazione: ${entry.foodNotes || "(n/d)"}
+Sostituzioni: ${entry.swaps || "(n/d)"}
+Fame: ${entry.hunger!=null ? entry.hunger+"/10" : "(n/d)"} ; Energia: ${entry.energy!=null ? entry.energy+"/10" : "(n/d)"}
+Note: ${entry.notes || "(n/d)"}
+Score 2-su-3 (proxy): ${cls.score}/3  [movimento=${cls.movement}, proteine~=${cls.proteinOk}, carbo_controllo~=${cls.carbsOk}]
+Piano attuale: ${plan ? (plan.name || "presente") : "assente"}
+`;
+    navigator.clipboard.writeText(text).then(() => alert("Copiato! Incollalo nella chat."));
+  }
+
+  $("saveBtn").onclick = () => {
+    const entry = getEntryFromForm();
+    const logs = loadLogs();
+    logs[entry.date] = entry;
+    saveLogs(logs);
+    renderHistoryAndKPI();
+    alert("Salvato.");
+  };
+
+  $("copyChatBtn").onclick = copyForChat;
+  $("clearFormBtn").onclick = () => clearForm(true);
+
+  $("exercisePicker").onchange = (e) => {
+    const name = e.target.value;
+    if (!name) return;
+    const line = `- ${name}: ${EX[name]}`;
+    const cur = $("exerciseList").value.trim();
+    $("exerciseList").value = cur ? (cur + "\n" + line) : line;
+    e.target.value = "";
+  };
+
+  $("importPlanBtn").onclick = () => {
+    const raw = $("planImport").value.trim();
+    if (!raw) return alert("Incolla un JSON nel campo Import Piano.");
+    try {
+      const plan = JSON.parse(raw);
+      savePlan(plan);
+      $("planImport").value = "";
+      renderPlan();
+      alert("Piano importato.");
+    } catch (err) {
+      alert("JSON non valido. Controlla di aver copiato tutto il blocco.");
+    }
+  };
+
+  $("exportPlanBtn").onclick = () => {
+    const plan = loadPlan();
+    if (!plan) return alert("Nessun piano salvato.");
+    const raw = JSON.stringify(plan, null, 2);
+    navigator.clipboard.writeText(raw).then(() => alert("Piano copiato negli appunti (JSON)."));
+  };
+
+  function downloadJson(filename, obj) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  $("exportDataBtn").onclick = () => {
+    const payload = {
+      version: "benessere.data.v1",
+      exportedAt: new Date().toISOString(),
+      logs: loadLogs(),
+      plan: loadPlan()
+    };
+    downloadJson("benessere-backup.json", payload);
+  };
+
+  $("importDataBtn").onclick = () => $("fileInput").click();
+
+  $("fileInput").onchange = async (ev) => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    const txt = await f.text();
+    try {
+      const payload = JSON.parse(txt);
+      if (!payload || !payload.logs) throw new Error("Formato non riconosciuto");
+      saveLogs(payload.logs);
+      if (payload.plan) savePlan(payload.plan);
+      renderPlan();
+      renderHistoryAndKPI();
+      alert("Import completato.");
+    } catch {
+      alert("File JSON non valido o formato non riconosciuto.");
+    } finally {
+      $("fileInput").value = "";
+    }
+  };
+
+  $("wipeBtn").onclick = () => {
+    if (!confirm("Sei sicuro? Cancellerà TUTTI i dati dal dispositivo.")) return;
+    localStorage.removeItem(KEY_LOGS);
+    localStorage.removeItem(KEY_PLAN);
+    renderPlan();
+    renderHistoryAndKPI();
+    clearForm(false);
+  };
+
+  (function init(){
+    $("date").value = todayISO();
+    initExercisePicker();
+    renderPlan();
+    renderHistoryAndKPI();
+    const logs = loadLogs();
+    const d = $("date").value;
+    if (logs[d]) setFormFromEntry(d, logs[d]);
+  })();
+</script>
+</body>
+</html>
